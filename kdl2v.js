@@ -41,26 +41,28 @@ class KDL2Factory {
         return (((0 | msb) << 8) | lsb);
     }
 
-    /* I simulate the game does, along with Game Boy's CPU effects */
+    /* I simulate what the game does, along with Game Boy's CPU effects */
     generateProceduralData() {
-        let list     = [];
-        let a        = 0x07;
-        let carryBit = 0;
-        let index    = 0;
+        var list     = [];
+        var a        = 0x07;
+        var carryBit = 0;
+        var index    = 0;
 
         while (a != 0) {
-            for (let b = 0x8; b >= 0; b -= 1) {
+            for (var b = 0; b < 8; b += 1) {
 
                 // rrc l
-                carryBit = (index >> 8) & 0x01;
-                index    = (index >> 1);
+                carryBit = index & 0x01;
+                index    = (carryBit << 7) | (index >> 1);
 
                 // rla
                 a        = (a << 1) | carryBit;
-                carryBit = (a >> 8) & 0x1;
+                carryBit = (a >> 8) & 0x01;
+                a        = a & 0xFF;
             }
 
             list.push(a);
+            index += 1;
             a += 1;
             if (a > 0xFF) {
                 a = 0;
@@ -91,7 +93,7 @@ class KDL2Factory {
                byte is the number. */
             let expansionByte = currentByte & 0xE0;
             if (expansionByte === 0xE0) {
-                typeNibble   = currentByte << 3;
+                typeNibble   = (currentByte << 3) & 0xE0;
                 numberNibble = data.getUint8(index);
                 index += 1;
             }
@@ -140,13 +142,16 @@ class KDL2Factory {
 
             case 0xA0:
                 startIndex = this.byteSwap(data.getUint8(index + 1), data.getUint8(index + 0));
+
                 for (let count = 0; count < (numberNibble + 1); count += 1) {
-                    /* The data at decompressData[i] acts as an index for thet proceduralData. */
+                    /* The data at decompressData[i] acts as an index for the proceduralData. */
                     let proceduralIndex = decompressedData[startIndex];
                     let theByte = proceduralData[proceduralIndex];
                     decompressedData.push(theByte);
                     startIndex += 1;
                 }
+
+                index += 2;
                 break;
 
             case 0xC0:
@@ -261,7 +266,9 @@ class KDL2Factory {
         let address = this.calculateAddress(assets.tiles.address, assets.tiles.bank) + 1;
         assets.tiles.data = this.decompress(data, address);
 
-        let chunkSize = data.getUint8(index);
+        /* KDL2 accesses tiles pretty oddly. They wrap VRAM around. Here, we will not modify the data, but compensate when we render in assemble() */
+
+        assets.tiles.chunkSize = data.getUint8(index);
         index += 1;
         assets.tiles.translation = this.decompress(data, index);
         assets.tiles.layer = [];
@@ -271,15 +278,11 @@ class KDL2Factory {
             assets.tiles.layer[current] = [];
 
             let counter = 0;
-            for (; counter < chunkSize; counter += 1) {
+            for (; counter < assets.tiles.chunkSize; counter += 1) {
                 assets.tiles.layer[current].push(assets.tiles.translation[counter + previousCounters]);
             }
             previousCounters += counter;
         }
-    }
-
-
-    toCanvas() {
     }
 
     /* Takes a canvas context and level index */
@@ -302,47 +305,84 @@ class KDL2Factory {
         context.clearRect(0, 0, canvas.width, canvas.height);
 
         /* Draw the level borders */
-        context.rect(0, 0, level.verticalSlices*16*16, level.horizontalSlices*16*16);
+        context.rect(0, 0, level.verticalSlices*16*16, level.horizontalSlices*16*8);
         context.stroke();
+
+        let amountToFill = new Array((0x80 - 16) * 16).fill(0);
+        let data = amountToFill.concat(level.assets.tiles.data);
+
+        function getTiles(data, layer, number) {
+            let tileNumber = level.assets.tiles.layer[layer][number];
+            let index = 0;
+
+            if (tileNumber > 0x7F) {
+                tileNumber = tileNumber % 0x80;
+            } else {
+                tileNumber += 0x80;
+            }
+
+            tileNumber *= 16;
+            return data.slice(tileNumber, tileNumber+16);
+        }
 
         let x = 0;
         let oldX = x;
         let y = 0;
-        let start = 0;
-        let tiles = level.blocks.data.map((aByte) => {
-            let data = level.assets.tiles.data;
+        let oldY = y;
+        let verticalSlice = 0;
+        let horizontalSlice = 0;
 
-            start = level.assets.tiles.layer[0][aByte];
-            tilePut(context, data.slice(start, start+8), x, y);
+        let tiles = level.blocks.data.map((aByte) => {
+            tilePut(context, getTiles(data, 0, aByte), x, y);
             x += 1;
-            start = level.assets.tiles.layer[1][aByte];
-            tilePut(context, data.slice(start, start+8), x, y);
+            tilePut(context, getTiles(data, 1, aByte), x, y);
             x -= 1;
             y += 1;
-            start = level.assets.tiles.layer[2][aByte];
-            tilePut(context, data.slice(start, start+8), x, y);
+            tilePut(context, getTiles(data, 2, aByte), x, y);
             x += 1;
-            start = level.assets.tiles.layer[3][aByte];
-            tilePut(context, data.slice(start, start+8), x, y);
+            tilePut(context, getTiles(data, 3, aByte), x, y);
+
             /* Put ourselves at the next position */
             y -= 1;
             x += 1;
 
-            /* The length of one chunk is 16 2x2 tiles. */
+            /* The length of one chunk is 16, 2x2 tiles. */
             if (x % (16*2) === 0) {
                 y += 2;
                 x = oldX;
             }
 
-            if (y % (16*2) == 0 && x % (16*2) == 0) {
-                y = 0;
-                x += (16*2);
+            if (x % (16*2) === 0 && y % (16*2) === 0) {
+                y = oldY;
+                x += 16*2;
                 oldX = x;
+                verticalSlice += 1;
+            }
+
+            if (verticalSlice >= level.verticalSlices) {
+                y += 16*2;
+                oldY = y;
+
+                x = 0;
+                oldX = x;
+
+                verticalSlice = 0;
+                horizontalSlice += 1;
             }
         });
 
     }
 
+}
+
+/* Simulates what it'd look like in VRAM */
+function vramPut(context, tiles) {
+    for (var y = 0; y < 16; y += 1) {
+        for (var x = 0; x < 16; x += 1) {
+            var index = (x*16)+(y*16*0x100);
+            tilePut(context, tiles.slice(index, index+16), x, y);
+        }
+    }
 }
 
 /* Tile x and tile y, not pixel positions! */
@@ -371,13 +411,14 @@ function tilePut(context, tiles, x, y) {
 
     let oldX = x;
     let oldY = y;
+
     for (let index = 0; index < tiles.length; index += 2) {
         let byte1 = tiles[index + 0];
         let byte2 = tiles[index + 1];
 
         x = oldX;
 
-        for (let bit = 7; bit > 0; bit -= 1) {
+        for (let bit = 7; bit >= 0; bit -= 1) {
             let bit1 = (byte1 >> bit) & 0x1;
             let bit2 = (byte2 >> bit) & 0x1;
 
@@ -387,6 +428,11 @@ function tilePut(context, tiles, x, y) {
         }
 
         y += 1;
+
+        if (y % 8 === 0) {
+            oldY = y;
+            y += 8;
+        }
     }
 }
 

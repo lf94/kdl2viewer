@@ -60,24 +60,24 @@ Where T is "Type bit" and N is "Number".
 
 There are 9 types.
 
-Type 00:
+**** Default:
 Read and write N bytes.
 
-Type 20:
+**** Type 20:
 Repeat next byte, N + 1 times
 
-Type 40:
+**** Type 40:
 Imagine we had data like this: 0209
 What "42" would do, is it would write this out: 020902090209
 It repeated 2 bytes N + 1 times.
 
-Type 60:
+**** Type 60:
 Next byte is written N + 1 times, but also has 1 added to the byte itself. Example: Start byte is 7E, the next is 7F, the next is 80, and so on...
 
-Type 80:
+**** Type 80:
 Copy N bytes, starting from the address of the next 2 bytes.
 
-Type A0:
+**** Type A0:
 Copy N bytes, starting from the address of the next 2 bytes. The difference here is, it reads the source byte, and that source byte is actually an index, which starts at $D900. It then writes the byte from the array to the destination.
 
 I knew that data at $D900 was tile data, but how does it get there? What does it look like? It turns out, using 8 lines of assembly, it's procedurally generated graphics. 1995 Game Boy procedurally generated graphics.
@@ -98,20 +98,16 @@ And it looks like this:
 
 [[images/kirby_proc.png]]
 
-Type C0:
+**** Type C0:
 Copy N bytes, walking backwards. This basically "vertically" mirrors the top half. The next 2 bytes are again, the address to start at.
 
-Type EO XX:
-Number of bytes to read and write
-
-Type F0:
-
+**** Type F0:
 So this is sort of an "expansion" byte, as in, storing a number in a nibble isn't enough, so this indicates that we need to use the next byte as the number.
 
 The type byte itself translates into 1 of the 6 types above. The format is %111TTTTT, where T is the type. Doing a logical left shift 3 times gets the type.
 
 
-Type FF:
+**** Type FF:
 End of file
 
 The routine for the compression format is located at $0708, and takes the following parameters: de - destination, hl - source.
@@ -224,3 +220,7 @@ C8XX bottom right
 rom0 074b - level reading ... general file loading, actually, decompression
 06bf - start of routine
 
+
+
+Interesting:
+level 106 - the way it's assembled could help with other levels.
