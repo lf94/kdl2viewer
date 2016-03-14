@@ -304,12 +304,17 @@ class KDL2Factory {
         /* Clear the canvas */
         context.clearRect(0, 0, canvas.width, canvas.height);
 
-        /* Draw the level borders */
-        context.rect(0, 0, level.verticalSlices*16*16, level.horizontalSlices*16*8);
-        context.stroke();
+        /* KDL2 assumes certain things about VRAM. So we make sure we abide by those assumptions. */
 
+        /* First, lets create a 0x100 * 16 amount of "VRAM" */
         let amountToFill = new Array((0x80 - 16) * 16).fill(0);
         let data = amountToFill.concat(level.assets.tiles.data);
+        data = data.concat(new Array((0x100*16) - data.length).fill(0));
+
+        /* There are 3 tiles that act as "fill" at the end of it. */
+        data.splice((0x7d+0x80)*16, 16, ...[0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00]);
+        data.splice((0x7e+0x80)*16, 16, ...[0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF]);
+        data.splice((0x7f+0x80)*16, 16, ...[0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00]);
 
         function getTiles(data, layer, number) {
             let tileNumber = level.assets.tiles.layer[layer][number];
