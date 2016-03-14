@@ -262,11 +262,37 @@ class KDL2Factory {
         };
         index += 3;
 
-        // Add 1 to the address because the first byte is something else
-        let address = this.calculateAddress(assets.tiles.address, assets.tiles.bank) + 1;
+
+        let address = this.calculateAddress(assets.tiles.address, assets.tiles.bank);
+
+        /* This byte determines where to start writing in our "VRAM" */
+        let vramStart = (0x9630 - (data.getUint8(address) << 4)) & 0xFFFF;
+
+        // If vramStart is less than 0x8800, then we're using 8000 mode
+        if (vramStart < 0x8800) {
+            assets.tiles.vram = 0x8000;
+        } else {
+            assets.tiles.vram = 0x8800;
+        }
+        address += 1;
+
         assets.tiles.data = this.decompress(data, address);
 
-        /* KDL2 accesses tiles pretty oddly. They wrap VRAM around. Here, we will not modify the data, but compensate when we render in assemble() */
+        /* We modify the data so it simulates what KDL2 assumes on a Game Boy's VRAM. */
+
+        // First we pad the start of the data, but taking our VRAM start address and subtracting with the total size of VRAM */
+
+        let prePadding = vramStart - assets.tiles.vram;
+        let amountToFill = new Array(prePadding).fill(0);
+        assets.tiles.data = amountToFill.concat(assets.tiles.data);
+        let postPadding = (assets.tiles.vram + 0x1800) - assets.tiles.data.length;
+        assets.tiles.data = assets.tiles.data.concat(new Array(postPadding).fill(0));
+
+        /* There are 3 tiles that act as "fill" at the end of it. */
+        assets.tiles.data.splice((0x7d+0x80)*16, 16, ...[0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00]);
+        assets.tiles.data.splice((0x7e+0x80)*16, 16, ...[0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF]);
+        assets.tiles.data.splice((0x7f+0x80)*16, 16, ...[0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00]);
+
 
         assets.tiles.chunkSize = data.getUint8(index);
         index += 1;
@@ -304,17 +330,6 @@ class KDL2Factory {
         /* Clear the canvas */
         context.clearRect(0, 0, canvas.width, canvas.height);
 
-        /* KDL2 assumes certain things about VRAM. So we make sure we abide by those assumptions. */
-
-        /* First, lets create a 0x100 * 16 amount of "VRAM" */
-        let amountToFill = new Array((0x80 - 16) * 16).fill(0);
-        let data = amountToFill.concat(level.assets.tiles.data);
-        data = data.concat(new Array((0x100*16) - data.length).fill(0));
-
-        /* There are 3 tiles that act as "fill" at the end of it. */
-        data.splice((0x7d+0x80)*16, 16, ...[0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00]);
-        data.splice((0x7e+0x80)*16, 16, ...[0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF]);
-        data.splice((0x7f+0x80)*16, 16, ...[0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00]);
 
         function getTiles(data, layer, number) {
             let tileNumber = level.assets.tiles.layer[layer][number];
@@ -329,6 +344,8 @@ class KDL2Factory {
             tileNumber *= 16;
             return data.slice(tileNumber, tileNumber+16);
         }
+
+        let data = level.assets.tiles.data;
 
         let x = 0;
         let oldX = x;
