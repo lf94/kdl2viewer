@@ -1,45 +1,57 @@
 * Reverse engineering Kirby's Dreamland 2, for Game Boy
+Unbuckle your seatbelts and stretch your legs ladies and gentlemen. This is a long ride.
 
 ** Why Kirby's Dreamland 2?
-I recently bought a Super Game Boy (commonly abbreviated as SGB). The SGB is literally a Game Boy CPU crammed into a SNES cartridge. In order for Game Boy emulators to emulate the SGB, they have to either emulate the SNES as a whole, or simulate parts of it. For me, emulators like [[bgb.bircd.org][bgb]] simulate it well enough to be used for development. Only 2-3 games really make extensive use of the SGB's capabilities anyways: Kirby's Dreamland 2, Space Invaders, and Hercules.
+I recently bought a Super Game Boy (commonly abbreviated as SGB). The SGB is literally a Game Boy CPU crammed into a SNES cartridge. In order for Game Boy emulators to emulate the SGB, they have to either emulate the SNES as a whole, or simulate parts of it. For me, emulators like [[bgb.bircd.org][bgb]] simulate it well enough to be used for development. Only several games really make use of the SGB's capabilities anyways: Kirby's Dreamland 2, Space Invaders, Hercules, Megaman, etc.
 
-I was familiar with the cute little Dreamland citizen, so I spent the next 2-3 days 100%ing the game with my girlfriend. Entirely cute, surprisingly difficult at times, and one epic final boss battle - I would easily rate this game 10/10. While playing I had few moments where I was just saying to myself "wow, this is actually a Game Boy game." Kirby's Dreamland 2 could have easily been an NES or SNES release (given some cosmetic changes). After some searching, turns out there's a Kirby's Dreamland 3 for SNES, except it's rare and worth at least $80!
+[[images/sgb.png]]
 
-After completing the game, I realized some levels were really well done, and some even represented some things...One was even a little explicit. Pulling up my rolling chair, I got to work.
+Why did I personally buy it though? Because playing games on a large TV is way easier on the eyes than a tiny screen. This makes, say, writing music on [[http://www.littlesounddj.com/lsd/][LSDJ]] way easier, especially if you spend hours at a time composing.
+
+Familiar with the cute little Dreamland citizen, I spent the next 2-3 days 100%ing the game with my girlfriend. Entirely cute, surprisingly difficult at times, and one epic final boss battle - I would easily rate this game 8/10. While playing I had few moments where I was just saying to myself "wow, this is actually a Game Boy game." Kirby's Dreamland 2 could have easily been an NES or SNES release ([[http://loveconquersallgam.es/post/2487450388/fuck-the-super-game-boy-kirbys-dream-land-2][given some cosmetic changes]]). After some searching, turns out there's a Kirby's Dreamland 3 for SNES, except it's rare and worth at least $80!
+
+[[images/theend.png]]
+
+What led me to the reverse engineering? While playing there was a level that resembled a woman. I was curious what other easter eggs the level designers created, or if there were any test or unused levels. Having experience with Game Boy assembly (my work-in-progress game is entirely in it) and reverse engineering Nintedo 64 games, I decided what the heck.
+
+It was time to pull up the rolling chair, and get to work.
 
 ** Where do I even start?
-Never having reverse engineered a Game Boy game before, it took a few minutes to figure out a vector of attack. I knew I was looking for something that changed the level. OK, what changes levels...
+I have never reverse engineered a Game Boy game before. I have never reverse engineered a level format before. I have never even written my own level format. It took a few minutes to figure out a vector of attack. I knew looking for something that changed the level felt like the right direction. OK, what changes levels...
 
 1. Entering doors
 2. Selecting a world
 3. Moving up, down, left and right
 
-Because I don't know where the code that detects we've entered a door, or selected a world, I went with 3. Now I did this pretty naively, and probably should've taken a different approach, but it worked. 
+Option 3 might sound weird, but for majority of Game Boy games, "lazy loading" a level from ROM is a very common pattern.
 
-The smart approach would've been to set a read breakpoint on where the joypad inputs are stored. From there, I follow routines that check to see if more of a level should be loaded (because remember, levels are "lazy loaded").
+I don't know where the code that detects we've entered a door is, or selected a world, so option 3 it was. In retrospective this pretty naive, and probably should've taken a different approach, but it worked. 
 
-But no, I didn't do that. Instead, knowing that the Game Boy's working RAM is really small, I just eyeballed RAM changes. Yeah. Within 2 seconds I found values only changing when parts of the map were changing. I set a write breakpoint, and I was in.
+The smart approach would've been to set a read breakpoint on where the joypad inputs are stored. From there, I would follow routines that check to see if more of a level should be loaded (because remember, levels are "lazy loaded"). Paired with dumping RAM between levels and reviewing the differences, this could've been effective.
+
+But no, I didn't do that. Instead, knowing that the Game Boy's working RAM (WRAM) is really small, I just eyeballed RAM changes. Yeah. Within 2 seconds I found values only changing when parts of the map were changing. I set a write breakpoint, and I was in the game's engine.
 
 ** Working my way backwards
-So it turns out this format was way more complex than I initially thought. The people at HAL Laboratory did an excellent job at designing the level engine for this game. From "file system" design, to compression formats, to the lazy level loading. Just fantastic stuff - which made it all harder for me of course.
+It turns out this format was way more complex than I initially thought. The people at HAL Laboratory did an excellent job at designing the level engine for this game. From "file system" design, to compression formats, to the lazy level loading. Just fantastic stuff - which made it all harder for me of course.
 
 *** One fourth of a tile? What?
-The first thing I spent a few hours on was changing 1/4th of a tile. But not just any tile - every single tile that looked alike. In my head I was going, "what kind of format is this...I guess they're trying to save space?"
+First thing I spent a few hours on was changing 1/4th of a tile. Not just any tile - every single tile that looked alike. In my head I was going, "what kind of format is this...I guess they're trying to save space?"
 
-[[kirby1_4th_tile.png]]
+[[images/bgb00001.png]]
 
-The reality was, it was easier to create 4x4 tiles this way!
+The reality was, it was easier to create 2x2 tiles this way!
 
 Instead of storing the tiles like [1,2,3,4], [1,2,3,4], the game instead says, "Hey, I need tile 2!", and goes like this:
 
-#+BEGIN_CENTER
+
 Array1[2] Array2[2]
+
 Array3[2] Array4[2]
-#+END_CENTER
+
 
 Which creates a 16x16 graphic.
 
-These arrays are essentially the "currently loaded graphics arrays". In RAM, they're located at $C500, $C600, $C700 and $C800.
+These arrays are essentially the "currently loaded graphics arrays". In WRAM, they're located at $C500, $C600, $C700 and $C800.
 
 *** Compression...format...in a Game Boy game?
 I set another write breakpoint on one of the graphics arrays' bytes to see what wrote it there. It was some routine that appeared to be checking for types! Could this be the level file format?!
@@ -48,9 +60,9 @@ No.
 
 This was something I totally didn't expect to have to deal with: a compression format. The only other time I had seen a compression format in a Game Boy game is while reading a demo's description, saying they used a LZMA-type (similar to 7z) of compression. Oh frig. I have never dealt with compression before, but I persisted...
 
-...And it wasn't that bad!
+...and it honestly wasn't that bad.
 
-The assembly honestly detailed everything that was going on. Sure, it wasn't easy to follow at first, but as I watched it eat and digest every byte by byte, I could slowly see what it was doing with different data. Patience was the key here.
+The assembly detailed everything that was going on (it has to!). Sure it wasn't easy to follow at first, but as I watched it eat and digest every byte by byte, I could slowly see what it was doing with different data. Patience was the key here.
 
 The compression format goes like this:
 
@@ -80,7 +92,7 @@ Copy N bytes, starting from the address of the next 2 bytes.
 **** Type A0:
 Copy N bytes, starting from the address of the next 2 bytes. The difference here is, it reads the source byte, and that source byte is actually an index, which starts at $D900. It then writes the byte from the array to the destination.
 
-I knew that data at $D900 was tile data, but how does it get there? What does it look like? It turns out, using 8 lines of assembly, it's procedurally generated graphics. 1995 Game Boy procedurally generated graphics.
+I knew that data at $D900 was tile data, or at least was mostly used for it, but how does that data actually get there? What does it look like? It turns out, using 8 lines of assembly, it's procedurally generated. 1995 Game Boy procedurally generated graphics.
 
 ld hl, $D900
 .loop
@@ -94,9 +106,11 @@ ld hl, $D900
   inc a
 jr nz, .loop
 
-And it looks like this:
+It looks like this:
 
-[[images/kirby_proc.png]]
+[[images/proc_kirby.png]]
+
+Without this table, the tiles in the game are not complete, and have white spots all over them.
 
 **** Type C0:
 Copy N bytes, walking backwards. This basically "vertically" mirrors the top half. The next 2 bytes are again, the address to start at.
@@ -115,112 +129,100 @@ The routine for the compression format is located at $0708, and takes the follow
 I set a read breakpoint on the FF byte (end of file) to see where this routine would bring me after it was completed.
 
 *** The golden table
-Having broken through the barrier, it's nice to be on the other side. This is where the real level loading format code is. I would say by this point, I was about 8-10 hours in. And you probably thought the hacking was all done within the few minutes it's taking you to read this!
+Having broken through the metaphorical barrier of compression code, it's nice to be on the other side. The real level loading format code was here. Around this point, I was about 8-10 hours in... It's definitely not as easy as I'm making it out to be in this article.
 
-I took time to see what was going on in the code I landed in. This meant lots of scrolling up, scrolling down, staring, and just thinking. I saw that $0708 (compression routine) was being called all over. At each call, I set an execution breakpoint to stop before they were called to see what their destination and source were. I inspected every source but none really meant much. Then it dawned on me...lets see where the sources are being read from.
+I took time to see what was happening in the code around my position. This meant lots of scrolling up, scrolling down, staring, and just thinking. I saw that $0708 (compression routine) was being called all over. There was another routine, $05DD, which changes the ROM bank right before the decompression. At each call, I set an execution breakpoint to stop before they were called to see what their destination and source were. I inspected every source but none really meant much. Then it dawned on me...lets see where the sources are being read from.
 
-At the top of the routine with all the compression routine calls, there was a call to $1564. Ah, the goldmine. $1564 contained the code that calculated the level index for the...level table. Yeah baby. I finally found the very start of this madness. 
+At the very top of the routine with all the decompression routine calls, there was 'call $1564'. Ah, the goldmine. $1564 contained the code that calculated the level index for the...level table. Yeah baby. I finally found the very start of this madness. 
 
-The level table starts at ROM bank 8, at $511F. There are 178 levels, or more technically speaking "rooms" in the entire game. The guys and I on IRC had some fun warping around from room to room, trying to find unused content, but we stopped after 10 minutes or something. When things cooled down, I began my descent down address mountain.
+The level table starts at ROM bank 8, at $511F in the European version of the game. There are 176 levels, or more technically speaking, "level parts", in the entire game. How did I find that out? I eyeballed the last level entry, of course. There's nothing in the table that indicates its the end - like a regular array in other languages. You just know the size. 
+
+The guys and I on IRC had some fun warping around from level to level, trying to find unused content, but we stopped after 10 minutes or something. Honestly, if the guys at HAL went through all the trouble to create decent compression, why waste it on unused content? We'll talk more about this later. When things cooled down, I began my descent down address mountain.
 
 *** The level format
+At this point, exhaustion began to settle in. It's not easy reverse engineering. There is a lot of plain old watching data being moved around. What really helps is seeing patterns you've already learned in higher languages, that you can now "see" at this low level. No, not because a compiler wrote translated high level code to assembly, but because a person with those higher level concepts wrote it.
 
-06 6C 17
-F8 50 16
-8:6E2F call $7171
+You may or may not want to skip my adventure reversing the format. Find the heading "Properly rendering a level" if you do.
 
-8:6E5B call $6E64
+Instead of reading the assembly instruction for instruction, I start by selecting the first level entry, which happens to be the first level of the game. The entry leads to what looks like a bunch of gibberish, more entries, and who knows what else. I started with swapping the entries, since I knew what they looked like. Taking an entry from another level entry, it turns out the levels would swap graphics. OK, fantastic, now I know what's there. I did the same for the next 2, but the game crashed. That left me the graphics format to figure out first.
 
-call $7008
-call $7067
+**** The graphics
+The address from the previous section led me to another address. At this point I wanted to figure out what was here, and not another address away. So I breakpointed after the address and began to watch the engine churn the data some more. I was surprised to find it writing to 4 different places in WRAM (working RAM, where, well, the work is done), instead of VRAM. Wait a minute... 4 places... maybe this is the data I was modifying at the very beginning. With some quick validation, it turns out that was the case. It was a translation-type table (or more correctly put, a map) that takes the tile number, and gives you the VRAM tile number, but four of them. Why four? Because four tiles equals one 2x2 "block". Here's a diagram of how I model it in my head:
 
-rom0 077b - texture loading
+[[images/translationtable.png]]
 
-type %1000 (80) - texture, next byte is bank number, followed by tile pixel data
-type %1010 (A0) - texture with something
+I want to also remind you that all of this data is still compressed. I would let the game do its decompression routine and then afterwards read or modify the data. In this specific case, the game would write out the data to $CF00, and then write it into 4 "sections": $C500, $C600, $C700, and $C800.
 
-$05DD - change ban0k
+I went back to the address we first encountered in this section and read breakpointed that. Within a minute I could clearly see it writing decompressed data to VRAM. So we have the graphics bit sorted out... or do we?
 
-Rom7 42bc - level lazy loading
+**** I will not be wasteful, I will not be wasteful, I WILL NOT BE WASTEFUL
+Those guys at HAL really out did themselves. Instead of being wasteful, at the beginning of every pixel data (or "tile data") block, there is a single byte that tells the location of where to start in VRAM. At first I was insanely confused by the code the read it. The engine would get its complement, increment it by 1, swap its nibbles, then add $96 and $30. I'm not an assembly expert. When there's something I can't understand, I get help. A member from #gbdev on irc.efnet.net explained what was happening - it was actually subtracting that byte, by adding! Crazy, and unintuitive, but he gave an excellent example using decimals:
 
-C500 - C800 are 4 "tiles" of level
+What do you get when you add 40 + 99? You get 139. Strip off the hundreds digit. 39. Whoa.
 
-CDXX - level part information?
+...
 
+At least I find it neat.
 
-ROM0 1286 - level loading
+Just to briefly summarize the above paragraph: the game essentially does $9630 + -(byte << 4).
 
-calls $1564, which gets the level address and bank
+I had only realized what this byte had done way after I was already rendering levels. Most of the levels, I would say 160/176 were rendering properly. Implementing this change made all levels render properly.
 
+*** Final hurdle: tiles
+Being at a loss for where the tile data is, I head back to visually scanning RAM. This technique is so simple and effective. Shortly I find the level tiles... because they somewhat resemble what I actually see in-game. Something is odd though. The data is saved to... Save RAM ($B300)? What the?
 
-1337: change bank for graphics loading
+Another guy in #gbdev told me that games sometimes use Save RAM as additional processing space. Well that's pretty cool, I guess why not if all you're saving is a level number and a few other things? This actually bit me in the ass earlier. I had made a corrupting change to a level. No matter what I did: resetting the emulator, using other copies of my ROM, even a fresh one, the corrupting change persisted. Then I deleted everything the emulator generated... and it worked. Earlier I had thought nothing of it - maybe the emulator writes my changes to RAM to disk? No idea, didn't care, wanted to move along.
 
+In any case, changing those tile numbers changed what I saw in-game. Cool. I set a write breakpoint to see where they were coming from. The tiles to the levels are located right after their addresses to graphics, and those 2 unknowns we talked about. It's all compressed as usual. All the game does is decompress directly to SRAM.
 
+I have everything I need to piece together a level, but not properly. There are vertical, horizontal, and just both-ways-large levels. How do I know what kind of level I'm rendering? For the sake of tiredness, I just wanted to render something. So doing guess and check work, I got most horizontal levels rendering. It was ugly.
 
+[[images/hacklevel.png]]
 
+The black rectangles are my first attempt at drawing the level border. You can see it was completely wrong.
 
+** Properly rendering a level...
+"Eyeballing" data was probably the most time effective thing I did for this project. Using this I found vertical and horizontal "slices" values. Eyeballing what was rendering already, I determined a level "slice" was 16x8 tiles. From there, I had properly rendering levels.
 
-$5120 - start of level table
+[[images/properlevel.png]]
 
-List of indexes - Address[2] Bank[1]
+And those other 2 unknown addresses? They lead to a level's enemies/npcs/objects and "door table". The door table tells the engine what door leads to what level part.
 
-Address leads to 4 unknown bytes, each nibble is data.
+So the complete format, from a conceptual perspective, looks like this (starting from smallest component to the largest, since that's the way I worked):
 
-Next 10 or 11 bytes are more information...chunks...
-|
-V
-Address[2]+Bank[1], Address[2]+Bank[1], Address[2]+Bank[1], 00/01, 00
-^- Graphics       , ^- 
+Game Boy tile data -> 2x2 tile table -> Tile table -> Slices piecing -> Level table
 
+And here is the diagram that shows everything I currently know:
 
-Address, Bank, Chunk Size<- starts here, walks backwards
-^- This data is for the graphics of this level part
+[[images/format.png]]
 
+Since it was a very long journey, and I have to work a job, and I have other side projects, I've decided to stop there. I'm sure with a little more work, level objects could load fairly easily. I invite anyone to submit a pull request on GitHub. A level editor wouldn't be far off either!
 
+Now lets take this time to just look at some hard-earned levels.
 
+[[images/level2.png]]
 
+[[images/level3.png]]
 
-4th byte is length of chunk byte, stored at $DB5C
+[[images/level4.png]]
 
-After following the address, the 4 bytes are skipped, presumably
-used by $05DD
+[[images/level5.png]]
 
-$05DD is bank changing function
+[[images/level7.png]]
 
+[[images/level8.png]]
 
-Is first byte $FF (end of file) ? return
+[[images/level9.png]]
 
-first byte of file AND %11100000 (E0)
+** Afterthoughts
+While working on kdl2viewer, I wondered what other games were developed by HAL Laboratory around this time. 5 years before, Kirby's Dreamland (1) was released. There were a few other releases, but only few were side-scrollers. I decided to be "safe" and go with KDL1.
 
-first byte of file AND %00011111 (1F)
+Another buddy on IRC took time to find the level table in KDL1, and upon inspection, the entire level format looks different. I inspected RAM and I could find the same data structures (translation table, tiles visible in WRAM (not SRAM this time). The game also doesn't use banking as much. There is no "where to start in VRAM" byte. It's probably a lot more simple, and I'm just sick of staring at data now. I encourage everyone to go hack that and modify the kdl2viewer to render those.
 
-7:42B8
+[[https://tcrf.net][For those guys looking to find unused content]]: I'm almost certain you won't find any in the Europe/USA version, but this tool might help with finding regional differences between that and the Japan version.
 
-C3XX level part?
+As a final thought, I wonder what it would be like to actually be paid for work like this. Salary, hours, what you'd learn in a year. It's fun at first, but after 3 days I feel like taking at least 1 week away from any assembly. Maybe if I had modern tools (something equivalent to IDA?), I would have a different opinion on doing this for a living. Anyways...
 
-call $4318
+That's it! I'm done! Goodbye!
 
-level is stored in SRAM0
-
-7:4350 - reading level tile
-
-call $0496
-
-0:086E: jr $087F
-
-0:11DC - level
-
-The bytes located there correspond to the XX below:
-
-C5XX is top left
-C6XX is top right
-C7XX bottom left
-C8XX bottom right
-
-rom0 074b - level reading ... general file loading, actually, decompression
-06bf - start of routine
-
-
-
-Interesting:
-level 106 - the way it's assembled could help with other levels.
+- Lee
