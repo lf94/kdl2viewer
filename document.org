@@ -2,7 +2,7 @@
 Unbuckle your seatbelts and stretch your legs ladies and gentlemen. This is a long ride.
 
 ** Why Kirby's Dreamland 2?
-I recently bought a Super Game Boy (commonly abbreviated as SGB). The SGB is literally a Game Boy CPU crammed into a SNES cartridge. In order for Game Boy emulators to emulate the SGB, they have to either emulate the SNES as a whole, or simulate parts of it. For me, emulators like [[bgb.bircd.org][bgb]] simulate it well enough to be used for development. Only several games really make use of the SGB's capabilities anyways: Kirby's Dreamland 2, Space Invaders, Hercules, Megaman, etc.
+I recently bought a Super Game Boy (commonly abbreviated as SGB). The SGB is literally a Game Boy CPU crammed into a SNES cartridge. In order for Game Boy emulators to emulate the SGB, they have to either emulate the SNES as a whole, or simulate parts of it. For me, emulators like [[http://bgb.bircd.org][bgb]] simulate it well enough to be used for development. Only several games really make use of the SGB's capabilities anyways: Kirby's Dreamland 2, Space Invaders, Hercules, Megaman, etc.
 
 [[./images/sgb.png]]
 
@@ -44,9 +44,10 @@ The reality was, it was easier to create 2x2 tiles this way!
 Instead of storing the tiles like [1,2,3,4], [1,2,3,4], the game instead says, "Hey, I need tile 2!", and goes like this:
 
 
+#+BEGIN_SRC C
 Array1[2] Array2[2]
-
 Array3[2] Array4[2]
+#+END_SRC
 
 
 Which creates a 16x16 graphic.
@@ -108,7 +109,7 @@ jr nz, .loop
 
 It looks like this:
 
-[[images/proc_kirby.png]]
+[[./images/proc_kirby.png]]
 
 Without this table, the tiles in the game are not complete, and have white spots all over them.
 
@@ -156,7 +157,7 @@ I want to also remind you that all of this data is still compressed. I would let
 I went back to the address we first encountered in this section and read breakpointed that. Within a minute I could clearly see it writing decompressed data to VRAM. So we have the graphics bit sorted out... or do we?
 
 **** I will not be wasteful, I will not be wasteful, I WILL NOT BE WASTEFUL
-Those guys at HAL really out did themselves. Instead of being wasteful, at the beginning of every pixel data (or "tile data") block, there is a single byte that tells the location of where to start in VRAM. At first I was insanely confused by the code the read it. The engine would get its complement, increment it by 1, swap its nibbles, then add $96 and $30. I'm not an assembly expert. When there's something I can't understand, I get help. A member from #gbdev on irc.efnet.net explained what was happening - it was actually subtracting that byte, by adding! Crazy, and unintuitive, but he gave an excellent example using decimals:
+Those guys at HAL really out did themselves. Instead of being wasteful, at the beginning of every pixel data (or "tile data") block, there is a single byte that tells the location of where to start in VRAM. At first I was insanely confused by the code. The engine would get its complement, increment it by 1, swap its nibbles, then add $96 and $30. I'm not an assembly expert. When there's something I can't understand, I get help. A member from #gbdev on irc.efnet.net explained what was happening - it was actually subtracting that byte, by adding! Crazy, and unintuitive, but he gave an excellent example using decimals:
 
 What do you get when you add 40 + 99? You get 139. Strip off the hundreds digit. 39. Whoa.
 
