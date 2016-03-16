@@ -4,13 +4,13 @@ Unbuckle your seatbelts and stretch your legs ladies and gentlemen. This is a lo
 ** Why Kirby's Dreamland 2?
 I recently bought a Super Game Boy (commonly abbreviated as SGB). The SGB is literally a Game Boy CPU crammed into a SNES cartridge. In order for Game Boy emulators to emulate the SGB, they have to either emulate the SNES as a whole, or simulate parts of it. For me, emulators like [[bgb.bircd.org][bgb]] simulate it well enough to be used for development. Only several games really make use of the SGB's capabilities anyways: Kirby's Dreamland 2, Space Invaders, Hercules, Megaman, etc.
 
-[[images/sgb.png]]
+[[./images/sgb.png]]
 
 Why did I personally buy it though? Because playing games on a large TV is way easier on the eyes than a tiny screen. This makes, say, writing music on [[http://www.littlesounddj.com/lsd/][LSDJ]] way easier, especially if you spend hours at a time composing.
 
 Familiar with the cute little Dreamland citizen, I spent the next 2-3 days 100%ing the game with my girlfriend. Entirely cute, surprisingly difficult at times, and one epic final boss battle - I would easily rate this game 8/10. While playing I had few moments where I was just saying to myself "wow, this is actually a Game Boy game." Kirby's Dreamland 2 could have easily been an NES or SNES release ([[http://loveconquersallgam.es/post/2487450388/fuck-the-super-game-boy-kirbys-dream-land-2][given some cosmetic changes]]). After some searching, turns out there's a Kirby's Dreamland 3 for SNES, except it's rare and worth at least $80!
 
-[[images/theend.png]]
+[[./images/theend.png]]
 
 What led me to the reverse engineering? While playing there was a level that resembled a woman. I was curious what other easter eggs the level designers created, or if there were any test or unused levels. Having experience with Game Boy assembly (my work-in-progress game is entirely in it) and reverse engineering Nintedo 64 games, I decided what the heck.
 
@@ -37,7 +37,7 @@ It turns out this format was way more complex than I initially thought. The peop
 *** One fourth of a tile? What?
 First thing I spent a few hours on was changing 1/4th of a tile. Not just any tile - every single tile that looked alike. In my head I was going, "what kind of format is this...I guess they're trying to save space?"
 
-[[images/bgb00001.png]]
+[[./images/bgb00001.png]]
 
 The reality was, it was easier to create 2x2 tiles this way!
 
@@ -149,7 +149,7 @@ Instead of reading the assembly instruction for instruction, I start by selectin
 **** The graphics
 The address from the previous section led me to another address. At this point I wanted to figure out what was here, and not another address away. So I breakpointed after the address and began to watch the engine churn the data some more. I was surprised to find it writing to 4 different places in WRAM (working RAM, where, well, the work is done), instead of VRAM. Wait a minute... 4 places... maybe this is the data I was modifying at the very beginning. With some quick validation, it turns out that was the case. It was a translation-type table (or more correctly put, a map) that takes the tile number, and gives you the VRAM tile number, but four of them. Why four? Because four tiles equals one 2x2 "block". Here's a diagram of how I model it in my head:
 
-[[images/translationtable.png]]
+[[./images/translationtable.png]]
 
 I want to also remind you that all of this data is still compressed. I would let the game do its decompression routine and then afterwards read or modify the data. In this specific case, the game would write out the data to $CF00, and then write it into 4 "sections": $C500, $C600, $C700, and $C800.
 
@@ -177,14 +177,14 @@ In any case, changing those tile numbers changed what I saw in-game. Cool. I set
 
 I have everything I need to piece together a level, but not properly. There are vertical, horizontal, and just both-ways-large levels. How do I know what kind of level I'm rendering? For the sake of tiredness, I just wanted to render something. So doing guess and check work, I got most horizontal levels rendering. It was ugly.
 
-[[images/hacklevel.png]]
+[[./images/hacklevel.png]]
 
 The black rectangles are my first attempt at drawing the level border. You can see it was completely wrong.
 
 ** Properly rendering a level...
 "Eyeballing" data was probably the most time effective thing I did for this project. Using this I found vertical and horizontal "slices" values. Eyeballing what was rendering already, I determined a level "slice" was 16x8 tiles. From there, I had properly rendering levels.
 
-[[images/properlevel.png]]
+[[./images/properlevel.png]]
 
 And those other 2 unknown addresses? They lead to a level's enemies/npcs/objects and "door table". The door table tells the engine what door leads to what level part.
 
@@ -194,28 +194,28 @@ Game Boy tile data -> 2x2 tile table -> Tile table -> Slices piecing -> Level ta
 
 And here is the diagram that shows everything I currently know:
 
-[[images/format.png]]
+[[./images/format.png]]
 
 Since it was a very long journey, and I have to work a job, and I have other side projects, I've decided to stop there. I'm sure with a little more work, level objects could load fairly easily. I invite anyone to submit a pull request on GitHub. A level editor wouldn't be far off either!
 
 Now lets take this time to just look at some hard-earned levels.
 
-[[images/level2.png]]
+[[./images/level2.png]]
 
-[[images/level3.png]]
+[[./images/level3.png]]
 
-[[images/level4.png]]
+[[./images/level4.png]]
 
-[[images/level5.png]]
+[[./images/level5.png]]
 
-[[images/level7.png]]
+[[./images/level7.png]]
 
-[[images/level8.png]]
+[[./images/level8.png]]
 
-[[images/level9.png]]
+[[./images/level9.png]]
 
 ** Afterthoughts
-While working on kdl2viewer, I wondered what other games were developed by HAL Laboratory around this time. 5 years before, Kirby's Dreamland (1) was released. There were a few other releases, but only few were side-scrollers. I decided to be "safe" and go with KDL1.
+While working on [[https://github.com/lf94/kdl2viewer][kdl2viewer]], I wondered what other games were developed by HAL Laboratory around this time. 5 years before, Kirby's Dreamland (1) was released. There were a few other releases, but only few were side-scrollers. I decided to be "safe" and go with KDL1.
 
 Another buddy on IRC took time to find the level table in KDL1, and upon inspection, the entire level format looks different. I inspected RAM and I could find the same data structures (translation table, tiles visible in WRAM (not SRAM this time). The game also doesn't use banking as much. There is no "where to start in VRAM" byte. It's probably a lot more simple, and I'm just sick of staring at data now. I encourage everyone to go hack that and modify the kdl2viewer to render those.
 
