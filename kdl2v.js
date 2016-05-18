@@ -76,7 +76,7 @@ class KDL2Renderer {
     /*
      * This is the decompression algorithm used in KDL2. It's simple - the guys at HAL Laboratory basically
      * took every kind of run-length encoding type you can think of, and used it here, with the exception
-     * of using their procedural data as a way of filling in some data.
+     * of using their procedural data as a way of filling in some data (LZ77 actually).
      */
     decompress(data, address) {
         let index            = address;
@@ -420,6 +420,8 @@ class KDL2Renderer {
             }
         });
 
+        renderer.render();
+
     }
 
 }
@@ -434,6 +436,11 @@ class GameBoyTilePlotter {
     constructor(canvas) {
         this.canvas = canvas;
         this.context = canvas.getContext('2d');
+        this.gbArray = [];
+        this.width = 0;
+        this.height = 0;
+        this.lastX = 0;
+        this.lastY = 0;
 
         this.lumin = 256;
         this.colors = [this.image(), this.image(), this.image(), this.image()];
@@ -449,16 +456,36 @@ class GameBoyTilePlotter {
 
     }
 
-
     image() { return this.context.createImageData(1,1); }
 
     clear() {
         this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
     }
 
+    render() {
+        let image = this.context.createImageData(this.width, this.height);
+        this.gbArray.forEach((pixel) => {
+            let index = (pixel[2]*(this.width*4)) + (pixel[1] * 4);
+            let d = pixel[0].data;
+            image.data[index+0] = d[0];
+            image.data[index+1] = d[1];
+            image.data[index+2] = d[2];
+            image.data[index+3] = d[3];
+        });
+
+        this.context.putImageData(image, 0, 0);
+    }
+
+    max(c, l) {
+        return c > l ? c : l;
+    }
+
     put(pixel, x, y) {
         let color = this.colors[pixel];
-        this.context.putImageData(color, x, y);
+
+        this.width = this.max(x, this.lastX);
+        this.height = this.max(y, this.lastY);
+        this.gbArray.push([color, x, y]);
     }
 
     /* Tile x and tile y, not pixel positions! */
