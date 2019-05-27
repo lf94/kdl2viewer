@@ -8,15 +8,28 @@
     <h1>Kirby's Dreamland 2 Level Viewer</h1>
     <h4>Brought to you by lf94 (ircsurfer33@gmail.com)</h4>
     <p>Browse for your Kirby's Dreamland 2 (tm) ROM and click "Open", then select a level to load and press "Render".</p>
-    <input id="kirbyLevelFile" type="file"/>
-    <button id="executeBtn">Open</button>
+    <input id="kdl2File" type="file"/>
+    <button id="kdl2ExecuteBtn">Open</button>
     <br/>
     <br/>
     <p>There are 176 levels to choose from. Choose one!</p>
-    <input id="levelSelector" type="number" value="0"/><button id="renderBtn">Render</button>
+    <input id="kdl2LevelSelector" type="number" value="0"/><button id="kdl2RenderBtn">Render</button>
     <br/>
     <br/>
-    <canvas id="viewer" width="2000" height="2000">Does not support canvas</canvas>
+    <canvas id="kdl2Viewer">Does not support canvas</canvas>
+
+    <h1>Kirby's Dreamland Level Viewer</h1>
+    <h4>Brought to you by lf94 (ircsurfer33@gmail.com)</h4>
+    <p>Browse for your Kirby's Dreamland (tm) ROM and click "Open", then select a level to load and press "Render".</p>
+    <input id="kdlFile" type="file"/>
+    <button id="kdlExecuteBtn">Open</button>
+    <br/>
+    <br/>
+    <p>There are 48 levels to choose from. Choose one!</p>
+    <input id="kdlLevelSelector" type="number" value="0"/><button id="kdlRenderBtn">Render</button>
+    <br/>
+    <br/>
+    <canvas id="kdlViewer">Does not support canvas</canvas>
     <script type="text/javascript" src="ui.js"></script>
   </body>
 </html>
