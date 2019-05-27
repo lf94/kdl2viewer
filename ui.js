@@ -1,9 +1,15 @@
 'use strict';
 
+const GameTypes = {
+    KDL: 'kdl',
+    KDL2: 'kdl2',
+};
+
 class UI {
-    constructor(filesElement, canvas, opener, renderer, levelSelector) {
+    constructor(gameType, filesElement, canvas, opener, renderer, levelSelector) {
         this.filesElement = filesElement;
         this.canvas = canvas;
+        this.gameType = gameType;
 
         this.opener = opener;
         opener.addEventListener('click', (event) => {
@@ -16,18 +22,24 @@ class UI {
         });
 
         this.levelSelector = levelSelector;
-        this.kdl2r = null;
+        this.levelRenderer = null;
     }
 
     open() {
-        this.kdl2r = new KDL2Renderer(this.filesElement.files);
-        this.kdl2r.open();
+        if (this.gameType == GameTypes.KDL) {
+            this.levelRenderer = new KDLRenderer(this.filesElement.files);
+        } else if (this.gameType == GameTypes.KDL2) {
+            this.levelRenderer = new KDL2Renderer(this.filesElement.files);
+        }
+
+        this.levelRenderer.open();
     }
 
     render() {
-        this.kdl2r.render(this.canvas, this.levelSelector.value);
+        this.levelRenderer.render(this.canvas, this.levelSelector.value);
     }
 }
 
 function $$$(el) { return document.getElementById(el); }
-var ui = new UI(...['kirbyLevelFile','viewer','executeBtn','renderBtn','levelSelector'].map($$$));
+var kdlUI = new UI(GameTypes.KDL, ...['kdlFile','kdlViewer','kdlExecuteBtn','kdlRenderBtn','kdlLevelSelector'].map($$$));
+var kdl2UI = new UI(GameTypes.KDL2, ...['kdl2File','kdl2Viewer','kdl2ExecuteBtn','kdl2RenderBtn','kdl2LevelSelector'].map($$$));

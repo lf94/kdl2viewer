@@ -1,11 +1,9 @@
 'use strict';
 
-/* Produces level renders from Kirby's Dreamland 2's ROM. */
-class KDL2Renderer {
-
-    /* Takes a list of files. */
+class KirbyRenderer {
     constructor(fileList) {
         this.fileList = fileList;
+        this.reversedBytesTable = this.generateReversedBytesTable();
     }
 
     /* Open and load all levels in the ROM */
@@ -21,7 +19,6 @@ class KDL2Renderer {
             let reader       = new FileReader();
             reader.onloadend = function () {
                 _this.levels = _this.parseROM(this.result);
-                //_this.toCanvas();
             };
             reader.onerror   = this.errorHandler;
             reader.onabort   = this.errorHandler;
@@ -40,10 +37,11 @@ class KDL2Renderer {
     }
 
     /*
-     * The game procedurally generates data that is used in its compression algorithm.
+     * The game procedurally generates lookup table for byte bitwise reversals that is used in its compression algorithm.
      * Here I've translated what the game does into JavaScript.
+     * Note: The original Kirby's Dream Land does not use a lookup table, and performs the byte reversal on the fly.
      */
-    generateProceduralData() {
+    generateReversedBytesTable() {
         var list     = [];
         var a        = 0x07;
         var carryBit = 0;
@@ -82,7 +80,6 @@ class KDL2Renderer {
         let index            = address;
         let endOfFileByte    = 0xFF;
         let decompressedData = [];
-        let proceduralData   = this.generateProceduralData();
 
         /* Temporary variables */
         let byte1      = 0;
@@ -151,9 +148,8 @@ class KDL2Renderer {
                 startIndex = this.byteSwap(data.getUint8(index + 1), data.getUint8(index + 0));
 
                 for (let count = 0; count < (numberPart + 1); count += 1) {
-                    /* The data at decompressData[i] acts as an index for the proceduralData. */
                     let proceduralIndex = decompressedData[startIndex];
-                    let theByte = proceduralData[proceduralIndex];
+                    let theByte = this.reversedBytesTable[proceduralIndex];
                     decompressedData.push(theByte);
                     startIndex += 1;
                 }
@@ -185,6 +181,15 @@ class KDL2Renderer {
         }
 
         return decompressedData;
+    }
+} 
+
+/* Produces level renders from Kirby's Dreamland 2's ROM. */
+class KDL2Renderer extends KirbyRenderer {
+
+    /* Takes a list of files. */
+    constructor(fileList) {
+        super(fileList);
     }
 
     parseROM(arrayBuffer) {
@@ -271,7 +276,6 @@ class KDL2Renderer {
         index += 3;
 
         let tiles = assets.tiles;
-
         let address = calculateAddress(tiles.address, tiles.bank);
 
         /*
@@ -420,10 +424,264 @@ class KDL2Renderer {
             }
         });
 
+        canvas.width = level.verticalSlices * 256;
+        canvas.height = y * 8;
         renderer.render();
+    }
+}
 
+/* Produces level renders from Kirby's Dreamland ROM. */
+class KDLRenderer extends KirbyRenderer {
+
+    /* Takes a list of files. */
+    constructor(fileList) {
+        super(fileList);
+        this.stageScreenCounts = [
+            5,  // Green Greens
+            16, // Castle Lololo
+            8,  // Float Islands
+            10, // Bubbly Clouds
+            10, // Mt. Dedede
+        ];
     }
 
+    getStageAndScreenFromLevelIndex(level) {
+        let stage = 0;
+        let screen = 0;
+        for (let i = 0; i < level; i++) {
+            if (screen >= this.stageScreenCounts[stage] - 1) {
+                stage++;
+                screen = 0;
+            } else {
+                screen++;
+            }
+        }
+
+        return {
+            stageIndex: stage,
+            screenIndex: screen,
+        };
+    }
+
+    parseROM(arrayBuffer) {
+        let data              = new DataView(arrayBuffer);
+        let totalStages = 5;
+        let stageTilesAddress = 0x2070;
+        let stageMetatilesAddress = 0x20A2;
+        let stageMapsAddress = 0x38B1;
+        let stages = [];
+
+        let stageTilesIndex = stageTilesAddress;
+        let stageMetatilesIndex = stageMetatilesAddress;
+        let stageMapsIndex = stageMapsAddress;
+        for (let stage = 0; stage < totalStages; stage += 1) {
+            stages.push({});
+
+            let bank = data.getUint8(stageTilesIndex++);
+            let msb  = data.getUint8(stageTilesIndex++);
+            let lsb  = data.getUint8(stageTilesIndex++);
+            stageTilesIndex += 2;
+            let address = this.byteSwap(lsb, msb);
+            stages[stage].tiles = this.parseTiles(data, address, bank, stage);
+
+            bank = data.getUint8(stageMetatilesIndex++);
+            msb  = data.getUint8(stageMetatilesIndex++);
+            lsb  = data.getUint8(stageMetatilesIndex++);
+            address = this.byteSwap(lsb, msb);
+            stages[stage].metatiles = this.parseMetatiles(data, address, bank);
+            stages[stage].screens = [];
+
+            msb = data.getUint8(stageMapsIndex++);
+            lsb = data.getUint8(stageMapsIndex++);
+            let stageScreensAddress = this.byteSwap(msb, lsb);
+            for (let screenIndex = 0; screenIndex < this.stageScreenCounts[stage]; screenIndex += 1) {
+                let screenAddress = stageScreensAddress + screenIndex * 8;
+                stages[stage].screens.push(this.parseMap(data, screenAddress, 0));
+            }
+        }
+
+        return stages;
+    }
+
+    parseTiles(data, address, bank, stageIndex) {
+        let index = calculateAddress(address, bank);
+        let tiles = {
+            address: address,
+            bank   : bank,
+        };
+
+        let tilesAddress = calculateAddress(tiles.address, tiles.bank);
+        let pixels = this.decompress(data, tilesAddress);
+
+        // Mt. Dedede loads larger set of tiles than the other stages.
+        let vramStart = stageIndex == 4 ? 0x8800 : 0x8AE0;
+        tiles.vram = 0x8000;
+
+        /* We modify the data so it simulates what KDL assumes when using a Game Boy's VRAM. */
+
+        // 0: First we pad the start of the data, taking our VRAM start address and subtracting with the total size of VRAM
+        let prePadding = vramStart - tiles.vram;
+        let amountToFill = new Array(prePadding).fill(0);
+
+        // Prepend it to the tile data we already have
+        pixels = amountToFill.concat(pixels);
+
+        // Calculate and append the rest of our fake VRAM
+        let postPadding = 0x1800 - pixels.length;
+        pixels = pixels.concat(new Array(postPadding).fill(0));
+
+        // Load sprites and status bar gfx, since they get used by the levels' background tiles.
+        let spriteTilesAddress = 0x8000;
+        let spritePixels = this.decompress(data, spriteTilesAddress);
+        pixels.splice(0x0, spritePixels.length, ...spritePixels);
+
+        let statusBarGfxAddress = 0x8855;
+        let statusBarPixels = this.decompress(data, statusBarGfxAddress);
+        pixels.splice(0x1670, statusBarPixels.length, ...statusBarPixels);
+
+        tiles.data = pixels;
+        return tiles;
+    }
+
+    parseMetatiles(data, address, bank) {
+        let metatilesAddress = calculateAddress(address, bank);
+        let rawMetatiles = this.decompress(data, calculateAddress(metatilesAddress, bank));
+
+        // Metatiles are grouped by 4 byte segments.
+        let metatiles = [];
+        for (let i = 0; i < rawMetatiles.length; i++) {
+            if (i % 4 == 0) {
+                metatiles.push([]);
+            }
+            metatiles[metatiles.length - 1].push(rawMetatiles[i]);
+        }
+
+        return metatiles;
+    }
+
+    parseMap(data, address, bank) {
+        let index = calculateAddress(address, bank);
+        let map = {
+            address: this.byteSwap(data.getUint8(index + 2), data.getUint8(index + 1)),
+            bank   : data.getUint8(index)
+        };
+        index += 3;
+
+        let mapAddress = calculateAddress(map.address, map.bank);
+        map.map = this.decompress(data, mapAddress);
+        map.width = data.getUint8(index++);
+        map.height = data.getUint8(index++);
+        return map;
+    }
+
+    getTilesDataAndMetatilesForLevel(level) {
+        // Mt. Dedede has some hardcoded logic for which tiles it uses. (It borrows from other stages' data).
+        let {stageIndex, screenIndex} = this.getStageAndScreenFromLevelIndex(level);
+        let tiles = this.levels[stageIndex].tiles;
+        let metatiles = this.levels[stageIndex].metatiles;
+        if (stageIndex == 4) {
+            switch (screenIndex) {
+                case 1:
+                case 6:
+                    tiles = this.levels[0].tiles;
+                    metatiles = this.levels[0].metatiles;
+                    break;
+                case 2:
+                    tiles = this.levels[1].tiles;
+                    metatiles = this.levels[1].metatiles;
+                case 7:
+                    tiles = this.levels[2].tiles;
+                    metatiles = this.levels[2].metatiles;
+                    break;
+                case 3:
+                    tiles = this.levels[2].tiles;
+                    metatiles = this.levels[2].metatiles;
+                case 8:
+                    tiles = this.levels[1].tiles;
+                    metatiles = this.levels[1].metatiles;
+                    break;
+                case 4:
+                case 9:
+                    tiles = this.levels[3].tiles;
+                    metatiles = this.levels[3].metatiles;
+                    break;
+            }
+        }
+
+        return {
+            data: tiles.data,
+            metatiles: metatiles,
+        };
+    }
+
+    /* Takes a canvas context and level index */
+    render(canvas, index) {
+        if (this.levels === undefined) {
+            throw 'No levels are loaded.';
+        }
+
+        if (this.levels.length <= 0) {
+            throw 'No levels are loaded.';
+        }
+
+        let numLevels = this.stageScreenCounts.reduce((sum, value) => sum + value);
+        if (index >= numLevels) {
+            throw 'Level does not exist';
+        }
+
+        let { stageIndex, screenIndex } = this.getStageAndScreenFromLevelIndex(index);
+        let stage = this.levels[stageIndex];
+        let screen = stage.screens[screenIndex];
+        let renderer = new GameBoyTilePlotter(canvas);
+
+        /* Clear the canvas */
+        renderer.clear();
+
+        function getTiles(data, layer, metatileId, metatiles) {
+            let tileNumber = metatiles[metatileId][layer];
+            let index = 0;
+
+            if (tileNumber > 0x7F) {
+                tileNumber = tileNumber % 0x80;
+            } else {
+                tileNumber += 0x80;
+            }
+
+            tileNumber += 0x80; // Tiles are always in 0x8800 - 0x97FF for KDL.
+            tileNumber *= 16;
+            return data.slice(tileNumber, tileNumber+16);
+        }
+
+        let { metatiles, data } = this.getTilesDataAndMetatilesForLevel(index);
+        let x = 0;
+        let y = 0;
+
+        let tiles = screen.map.map((metatileId) => {
+
+            /* Place the tiles in a 2x2 square */
+            renderer.plot(getTiles(data, 0, metatileId, metatiles), x, y);
+            x += 1;
+            renderer.plot(getTiles(data, 1, metatileId, metatiles), x, y);
+            x -= 1;
+            y += 1;
+            renderer.plot(getTiles(data, 2, metatileId, metatiles), x, y);
+            x += 1;
+            renderer.plot(getTiles(data, 3, metatileId, metatiles), x, y);
+
+            /* Put ourselves at the next position */
+            y -= 1;
+            x += 1;
+
+            if (x == screen.width * 2) {
+                x = 0;
+                y += 2;
+            }
+        });
+
+        canvas.width = screen.width * 16;
+        canvas.height = screen.height * 16;
+        renderer.render();
+    }
 }
 
 /* A simple address helper to translate an address & bank to an absolute address. */
@@ -442,16 +700,19 @@ class GameBoyTilePlotter {
         this.lastX = 0;
         this.lastY = 0;
 
-        this.lumin = 256;
+        let lcdGreenColors = [
+            [224, 248, 208],
+            [136, 192, 112],
+            [ 52, 104,  86],
+            [  8,  24,  32],
+        ];
         this.colors = [this.image(), this.image(), this.image(), this.image()];
-        this.colors.forEach((color) => {
+        this.colors.forEach((color, index) => {
             var d = color.data;
-            d[0]   = this.lumin;
-            d[1]   = this.lumin;
-            d[2]   = this.lumin;
+            d[0]   = lcdGreenColors[index][0];
+            d[1]   = lcdGreenColors[index][1];
+            d[2]   = lcdGreenColors[index][2];
             d[3]   = 255;
-
-            this.lumin -= (0x100 / 4);
         });
 
     }
@@ -507,10 +768,10 @@ class GameBoyTilePlotter {
 
             /* OR them together, to get eight 2-bit pixels */
             for (let bit = 7; bit >= 0; bit -= 1) {
-                let bit1 = (byte1 >> bit) & 0x1;
-                let bit2 = (byte2 >> bit) & 0x1;
+                let lo = (byte1 >> bit) & 0x1;
+                let hi = (byte2 >> bit) & 0x1;
 
-                let pixel = (((0 | bit1) << 1) | bit2);
+                let pixel = (((0 | hi) << 1) | lo);
                 this.put(pixel, x, y);
                 x += 1;
             }
