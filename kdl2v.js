@@ -589,6 +589,7 @@ class KDLRenderer extends KirbyRenderer {
                 case 2:
                     tiles = this.levels[1].tiles;
                     metatiles = this.levels[1].metatiles;
+                    break;
                 case 7:
                     tiles = this.levels[2].tiles;
                     metatiles = this.levels[2].metatiles;
@@ -596,6 +597,7 @@ class KDLRenderer extends KirbyRenderer {
                 case 3:
                     tiles = this.levels[2].tiles;
                     metatiles = this.levels[2].metatiles;
+                    break;
                 case 8:
                     tiles = this.levels[1].tiles;
                     metatiles = this.levels[1].metatiles;
