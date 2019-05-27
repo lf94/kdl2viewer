@@ -700,16 +700,19 @@ class GameBoyTilePlotter {
         this.lastX = 0;
         this.lastY = 0;
 
-        this.lumin = 256;
+        let lcdGreenColors = [
+            [224, 248, 208],
+            [136, 192, 112],
+            [ 52, 104,  86],
+            [  8,  24,  32],
+        ];
         this.colors = [this.image(), this.image(), this.image(), this.image()];
-        this.colors.forEach((color) => {
+        this.colors.forEach((color, index) => {
             var d = color.data;
-            d[0]   = this.lumin;
-            d[1]   = this.lumin;
-            d[2]   = this.lumin;
+            d[0]   = lcdGreenColors[index][0];
+            d[1]   = lcdGreenColors[index][1];
+            d[2]   = lcdGreenColors[index][2];
             d[3]   = 255;
-
-            this.lumin -= (0x100 / 4);
         });
 
     }
