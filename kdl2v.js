@@ -195,12 +195,10 @@ class KDL2Renderer extends KirbyRenderer {
     parseROM(arrayBuffer) {
         let data              = new DataView(arrayBuffer);
         let levelTableBank    = 8;
-        let levelTableAddress = 0x511F;
+        let levelTableAddress = 0x511D;
         let index             = calculateAddress(levelTableAddress, levelTableBank);
-        let totalLevels       = 177;
+        let totalLevels       = 178;
         let levels            = [];
-
-        index += 1;
 
         for (let counter = 0; counter < totalLevels; counter += 1) {
             let lsb  = data.getUint8(index);
